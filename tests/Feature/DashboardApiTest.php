@@ -125,6 +125,7 @@ class DashboardApiTest extends TestCase
             'range over a year' => ['from=2025-01-01&to=2026-06-01', 'from'],
             'end before start' => ['from=2026-06-10&to=2026-06-01', 'to'],
             'bad date format' => ['from=06/01/2026', 'from'],
+            'start in the future' => ['from=2026-07-01', 'from'],
             'unknown platform' => ['platform=fridge', 'platform'],
         ];
     }

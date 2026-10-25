@@ -10,7 +10,8 @@ export const PRESETS = [
     { key: '90d', label: 'Last 90 days', days: 90 },
 ];
 
-export const PLATFORMS = ['ios', 'android', 'pc'];
+/** Mirrors config('analytics.platforms'), which the API validates against. */
+export const PLATFORMS = ['ios', 'android', 'pc', 'web', 'console'];
 
 function read(key, fallback) {
     try {
