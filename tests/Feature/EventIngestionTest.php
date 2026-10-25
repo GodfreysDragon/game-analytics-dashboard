@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Game;
 use App\Models\Player;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -95,6 +96,31 @@ class EventIngestionTest extends TestCase
         $this->assertDatabaseHas('game_sessions', ['session_key' => 's1', 'event_count' => 2]);
     }
 
+    public function test_a_retry_that_commits_while_waiting_for_the_player_locks_is_not_counted_twice(): void
+    {
+        $batch = [
+            $this->event('session_start', 'alice', '2026-06-15 10:00:00', ['session_id' => 's1']),
+            $this->event('purchase', 'alice', '2026-06-15 10:01:00', ['session_id' => 's1', 'value' => 4.99]),
+        ];
+
+        // Stand in for a concurrent retry: the same batch commits just as this request takes its player locks.
+        $retried = false;
+        DB::listen(function (QueryExecuted $query) use ($batch, &$retried): void {
+            if (! $retried && str_starts_with($query->sql, 'select') && str_contains($query->sql, '"players"')) {
+                $retried = true;
+                $this->ingest($this->game, $batch);
+            }
+        });
+
+        $this->send($batch)->assertAccepted()->assertJson(['accepted' => 0, 'duplicates' => 2]);
+
+        $alice = Player::sole();
+        $this->assertSame(2, $alice->event_count);
+        $this->assertSame(4.99, $alice->lifetime_value);
+        $this->assertSame(1, $alice->session_count);
+        $this->assertDatabaseHas('game_sessions', ['session_key' => 's1', 'event_count' => 2]);
+    }
+
     public function test_a_uuid_repeated_inside_one_batch_is_stored_once(): void
     {
         $event = $this->event('session_start', 'alice', '2026-06-15 10:00:00');
@@ -144,6 +170,25 @@ class EventIngestionTest extends TestCase
         $this->assertDatabaseCount('game_sessions', 1);
         $this->assertDatabaseHas('game_sessions', ['session_key' => 's1', 'duration_seconds' => 600, 'event_count' => 2]);
         $this->assertSame(1, Player::sole()->session_count);
+    }
+
+    public function test_session_ids_are_scoped_to_the_player(): void
+    {
+        $this->send([
+            $this->event('session_start', 'alice', '2026-06-15 10:00:00', ['session_id' => 'sess-1']),
+            $this->event('session_start', 'bob', '2026-06-15 11:00:00', ['session_id' => 'sess-1']),
+            $this->event('session_end', 'bob', '2026-06-15 11:05:00', ['session_id' => 'sess-1']),
+        ])->assertAccepted();
+        $this->send([$this->event('session_end', 'alice', '2026-06-15 10:10:00', ['session_id' => 'sess-1'])])->assertAccepted();
+
+        $alice = Player::where('external_id', 'alice')->sole();
+        $bob = Player::where('external_id', 'bob')->sole();
+
+        $this->assertDatabaseCount('game_sessions', 2);
+        $this->assertDatabaseHas('game_sessions', ['player_id' => $alice->id, 'session_key' => 'sess-1', 'duration_seconds' => 600, 'event_count' => 2]);
+        $this->assertDatabaseHas('game_sessions', ['player_id' => $bob->id, 'session_key' => 'sess-1', 'duration_seconds' => 300, 'event_count' => 2]);
+        $this->assertSame(1, $alice->session_count);
+        $this->assertSame(1, $bob->session_count);
     }
 
     public function test_device_context_comes_from_the_newest_event(): void

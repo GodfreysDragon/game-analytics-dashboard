@@ -33,7 +33,8 @@ return new class extends Migration
             $table->unsignedInteger('duration_seconds')->default(0);
             $table->unsignedInteger('event_count')->default(0);
 
-            $table->unique(['game_id', 'session_key']);
+            // Clients only have to keep session ids unique per player, not across the whole game.
+            $table->unique(['player_id', 'session_key']);
             $table->index(['game_id', 'started_on']);
             $table->index(['player_id', 'started_at']);
         });

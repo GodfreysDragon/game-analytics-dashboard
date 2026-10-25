@@ -31,26 +31,49 @@ final class EventIngestor
         }
 
         return DB::transaction(function () use ($game, $batch, $inBatchDuplicates, $receivedAt) {
-            $seen = DB::table('events')
-                ->where('game_id', $game->id)
-                ->whereIn('uuid', array_map('strval', array_keys($batch)))
-                ->pluck('uuid')
-                ->all();
-
-            $fresh = array_diff_key($batch, array_flip($seen));
+            $fresh = $this->withoutStoredEvents($game, $batch);
 
             if ($fresh === []) {
-                return new IngestResult(0, $inBatchDuplicates + count($seen), 0);
+                return new IngestResult(0, $inBatchDuplicates + count($batch), 0);
             }
 
-            [$players, $newPlayers, $movedCohorts] = $this->upsertPlayers($game, $fresh);
+            [$players, $newPlayers] = $this->lockPlayers($game, $fresh);
+
+            // A concurrent retry of this batch may have committed while we waited for the player
+            // locks. Check again now that we hold them, so its events are never counted twice. This
+            // read takes a shared lock so MySQL reads the latest rows, not the transaction's snapshot.
+            $fresh = $this->withoutStoredEvents($game, $fresh, locking: true);
+
+            if ($fresh === []) {
+                return new IngestResult(0, $inBatchDuplicates + count($batch), $newPlayers);
+            }
+
+            $movedCohorts = $this->updatePlayers($fresh, $players);
 
             $this->insertEvents($game, $fresh, $players, $receivedAt);
             $this->recordActivityDays($game, $fresh, $players, $movedCohorts);
             $this->upsertSessions($game, $fresh, $players);
 
-            return new IngestResult(count($fresh), $inBatchDuplicates + count($seen), $newPlayers);
-        });
+            return new IngestResult(count($fresh), $inBatchDuplicates + count($batch) - count($fresh), $newPlayers);
+        }, 3);
+    }
+
+    /**
+     * Drop events whose uuid this game has already stored.
+     *
+     * @param  array<string, array>  $events  keyed by uuid
+     * @return array<string, array>
+     */
+    private function withoutStoredEvents(Game $game, array $events, bool $locking = false): array
+    {
+        $stored = DB::table('events')
+            ->where('game_id', $game->id)
+            ->whereIn('uuid', array_map('strval', array_keys($events)))
+            ->when($locking, fn ($query) => $query->sharedLock())
+            ->pluck('uuid')
+            ->all();
+
+        return array_diff_key($events, array_flip($stored));
     }
 
     /**
@@ -87,41 +110,16 @@ final class EventIngestor
     }
 
     /**
-     * Create unseen players and widen first/last-seen for known ones.
+     * Create unseen players, then lock every player in the batch. The locks serialise
+     * concurrent batches for the same players, which keeps the counter updates exact.
      *
-     * Returns the player rows keyed by external id, how many players were created, and
-     * player id => new cohort date for players whose first-seen day moved earlier because
-     * a late event arrived.
+     * Returns the player rows keyed by external id and how many players were created.
      *
-     * @return array{0: array<string, object>, 1: int, 2: array<int, string>}
+     * @return array{0: array<string, object>, 1: int}
      */
-    private function upsertPlayers(Game $game, array $events): array
+    private function lockPlayers(Game $game, array $events): array
     {
-        $stats = [];
-
-        foreach ($events as $event) {
-            $id = $event['player'];
-            $s = $stats[$id] ?? ['first' => $event['at'], 'last' => $event['at'], 'count' => 0, 'value' => 0.0, 'context' => [], 'context_at' => null];
-
-            $s['first'] = $event['at']->min($s['first']);
-            $s['last'] = $event['at']->max($s['last']);
-            $s['count']++;
-            $s['value'] += $event['name'] === 'purchase' ? (float) $event['value'] : 0.0;
-
-            // Device context comes from the newest event that carries it.
-            $context = array_filter([
-                'platform' => $event['platform'],
-                'country' => $event['country'],
-                'app_version' => $event['app_version'],
-            ]);
-            if ($context !== [] && ($s['context_at'] === null || $event['at']->gte($s['context_at']))) {
-                $s['context'] = $context + $s['context'];
-                $s['context_at'] = $event['at'];
-            }
-
-            $stats[$id] = $s;
-        }
-
+        $stats = $this->playerStats($events);
         $externalIds = array_map('strval', array_keys($stats));
         $now = now()->format(self::DATETIME);
 
@@ -142,10 +140,25 @@ final class EventIngestor
             ->get(['id', 'external_id', 'first_seen_at', 'first_seen_on', 'last_seen_at'])
             ->keyBy('external_id');
 
+        return [$rows->all(), $created];
+    }
+
+    /**
+     * Widen first/last-seen and add the batch to each player's counters.
+     *
+     * Returns player id => new cohort date for players whose first-seen day moved earlier
+     * because a late event arrived.
+     *
+     * @param  array<string, object>  $players  locked rows keyed by external id; first_seen_on is updated in place
+     * @return array<int, string>
+     */
+    private function updatePlayers(array $events, array $players): array
+    {
+        $now = now()->format(self::DATETIME);
         $movedCohorts = [];
 
-        foreach ($rows as $externalId => $row) {
-            $s = $stats[$externalId];
+        foreach ($this->playerStats($events) as $externalId => $s) {
+            $row = $players[$externalId];
             $first = $s['first']->min(CarbonImmutable::parse($row->first_seen_at, 'UTC'));
             $last = $s['last']->max(CarbonImmutable::parse($row->last_seen_at, 'UTC'));
 
@@ -166,7 +179,42 @@ final class EventIngestor
             $row->first_seen_on = $first->toDateString();
         }
 
-        return [$rows->all(), $created, $movedCohorts];
+        return $movedCohorts;
+    }
+
+    /**
+     * Per-player totals for a batch: first/last event time, event count, spend, and the
+     * device context of the newest event that carries one.
+     *
+     * @return array<string, array{first: CarbonImmutable, last: CarbonImmutable, count: int, value: float, context: array<string, string>, context_at: CarbonImmutable|null}>
+     */
+    private function playerStats(array $events): array
+    {
+        $stats = [];
+
+        foreach ($events as $event) {
+            $id = $event['player'];
+            $s = $stats[$id] ?? ['first' => $event['at'], 'last' => $event['at'], 'count' => 0, 'value' => 0.0, 'context' => [], 'context_at' => null];
+
+            $s['first'] = $event['at']->min($s['first']);
+            $s['last'] = $event['at']->max($s['last']);
+            $s['count']++;
+            $s['value'] += $event['name'] === 'purchase' ? (float) $event['value'] : 0.0;
+
+            $context = array_filter([
+                'platform' => $event['platform'],
+                'country' => $event['country'],
+                'app_version' => $event['app_version'],
+            ]);
+            if ($context !== [] && ($s['context_at'] === null || $event['at']->gte($s['context_at']))) {
+                $s['context'] = $context + $s['context'];
+                $s['context_at'] = $event['at'];
+            }
+
+            $stats[$id] = $s;
+        }
+
+        return $stats;
     }
 
     private function insertEvents(Game $game, array $events, array $players, CarbonImmutable $receivedAt): void
@@ -238,8 +286,10 @@ final class EventIngestor
                 continue;
             }
 
-            $key = $e['session'];
-            $s = $sessions[$key] ?? ['player_id' => $players[$e['player']]->id, 'start' => $e['at'], 'end' => $e['at'], 'count' => 0];
+            // Session ids only need to be unique per player, so two players' "sess-1" stay apart.
+            $playerId = $players[$e['player']]->id;
+            $key = $playerId.'|'.$e['session'];
+            $s = $sessions[$key] ?? ['player_id' => $playerId, 'session_key' => $e['session'], 'start' => $e['at'], 'end' => $e['at'], 'count' => 0];
             $s['start'] = $e['at']->min($s['start']);
             $s['end'] = $e['at']->max($s['end']);
             $s['count']++;
@@ -252,17 +302,16 @@ final class EventIngestor
 
         $existing = DB::table('game_sessions')
             ->where('game_id', $game->id)
-            ->whereIn('session_key', array_map('strval', array_keys($sessions)))
+            ->whereIn('player_id', array_unique(array_column($sessions, 'player_id')))
+            ->whereIn('session_key', array_unique(array_column($sessions, 'session_key')))
             ->lockForUpdate()
-            ->get(['id', 'session_key', 'started_at', 'ended_at'])
-            ->keyBy('session_key');
+            ->get(['id', 'player_id', 'session_key', 'started_at', 'ended_at'])
+            ->keyBy(fn (object $row) => $row->player_id.'|'.$row->session_key);
 
         $inserts = [];
         $newSessionsPerPlayer = [];
 
         foreach ($sessions as $key => $s) {
-            $key = (string) $key;
-
             if ($row = $existing->get($key)) {
                 $start = $s['start']->min(CarbonImmutable::parse($row->started_at, 'UTC'));
                 $end = $s['end']->max(CarbonImmutable::parse($row->ended_at, 'UTC'));
@@ -281,7 +330,7 @@ final class EventIngestor
             $inserts[] = [
                 'game_id' => $game->id,
                 'player_id' => $s['player_id'],
-                'session_key' => $key,
+                'session_key' => $s['session_key'],
                 'started_at' => $s['start']->format(self::DATETIME),
                 'started_on' => $s['start']->toDateString(),
                 'ended_at' => $s['end']->format(self::DATETIME),

@@ -22,7 +22,7 @@ class ReportRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'from' => ['nullable', 'date_format:Y-m-d'],
+            'from' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
             'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
             'platform' => ['nullable', 'string', 'in:'.implode(',', config('analytics.platforms'))],
         ];
