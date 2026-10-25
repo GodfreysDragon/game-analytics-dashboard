@@ -25,3 +25,10 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Local AI agent setup (Laravel Boost guidelines, skills and MCP config)
+/.claude
+/.mcp.json
+/AGENTS.md
+/CLAUDE.md
+/boost.json
