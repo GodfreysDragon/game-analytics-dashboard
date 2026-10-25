@@ -1,8 +1,10 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+// Hosted demo only: stream newly simulated events, rebuilding the history after midnight UTC.
+Schedule::command('analytics:demo-refresh')
+    ->everyFiveMinutes()
+    ->when(fn () => (bool) config('analytics.demo_mode'))
+    ->withoutOverlapping(30)
+    ->onOneServer();

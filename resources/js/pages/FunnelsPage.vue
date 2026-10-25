@@ -5,7 +5,7 @@ import FunnelChart from '../components/charts/FunnelChart.vue';
 import { platformColor } from '../components/charts/scale';
 import { api } from '../lib/api';
 import { duration, eventLabel, minutesLabel, number, percent } from '../lib/format';
-import { game, range, state } from '../lib/store';
+import { DEMO, game, range, state } from '../lib/store';
 import { useReport } from '../lib/useReport';
 
 const WINDOWS = [5, 15, 30, 60, 120, 360, 1440, 4320, 10080];
@@ -145,11 +145,12 @@ watch(() => draft.steps.length, (n) => n > MAX_STEPS && draft.steps.splice(MAX_S
 
                 <p v-if="formError" class="text-sm text-bad" role="alert">{{ formError }}</p>
                 <div class="flex flex-wrap gap-2">
-                    <button type="submit" class="btn btn-primary" :disabled="saving || !dirty || !draft.name">{{ draft.id ? 'Save' : 'Save funnel' }}</button>
-                    <button v-if="draft.id" type="button" class="btn" :disabled="saving || !draft.name" @click="save(true)">Save as new</button>
-                    <button v-if="draft.id" type="button" class="btn ml-auto text-bad" @click="remove">Delete</button>
+                    <button type="submit" class="btn btn-primary" :disabled="DEMO || saving || !dirty || !draft.name">{{ draft.id ? 'Save' : 'Save funnel' }}</button>
+                    <button v-if="draft.id" type="button" class="btn" :disabled="DEMO || saving || !draft.name" @click="save(true)">Save as new</button>
+                    <button v-if="draft.id" type="button" class="btn ml-auto text-bad" :disabled="DEMO" @click="remove">Delete</button>
                 </div>
-                <p v-if="dirty && draft.id" class="text-xs text-muted">Unsaved changes. Results show the edited definition.</p>
+                <p v-if="DEMO" class="text-xs text-muted">Saving is turned off in the demo, but edits still update the results live.</p>
+                <p v-else-if="dirty && draft.id" class="text-xs text-muted">Unsaved changes. Results show the edited definition.</p>
             </form>
         </div>
 

@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import FilterBar from './components/FilterBar.vue';
 import { api, setCsrfToken } from './lib/api';
-import { applyTheme, game, state } from './lib/store';
+import { DEMO, applyTheme, game, state } from './lib/store';
 
 const route = useRoute();
 const router = useRouter();
@@ -86,6 +86,9 @@ async function logout() {
                 </div>
             </header>
             <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+                <p v-if="DEMO" class="mb-4 text-xs text-muted">
+                    Read-only demo: the players are simulated, and new events arrive every few minutes. Saving and key changes are turned off.
+                </p>
                 <div v-if="!game && !route.meta.noGame" class="card p-8 text-center text-sm text-ink-2">
                     No games yet. <router-link :to="{ name: 'settings' }" class="text-accent-ink underline">Register a game</router-link> to get an ingest key.
                 </div>

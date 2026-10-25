@@ -2,11 +2,11 @@
 import { reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api, setCsrfToken } from '../lib/api';
-import { loadGames, state } from '../lib/store';
+import { DEMO, loadGames, state } from '../lib/store';
 
 const route = useRoute();
 const router = useRouter();
-const form = reactive({ email: 'admin@example.com', password: '', remember: true });
+const form = reactive({ email: 'admin@example.com', password: DEMO ? 'password' : '', remember: true });
 const error = ref('');
 const busy = ref(false);
 
@@ -44,7 +44,8 @@ async function submit() {
             </label>
             <p v-if="error" class="text-sm text-bad" role="alert">{{ error }}</p>
             <button type="submit" class="btn btn-primary w-full justify-center" :disabled="busy">{{ busy ? 'Signing in…' : 'Sign in' }}</button>
-            <p class="text-xs text-muted">Demo account: admin@example.com / password (after <code>php artisan db:seed</code>).</p>
+            <p v-if="DEMO" class="text-xs text-muted">This is a read-only demo with simulated players. The demo account is filled in: just sign in.</p>
+            <p v-else class="text-xs text-muted">Demo account: admin@example.com / password (after <code>php artisan db:seed</code>).</p>
         </form>
     </div>
 </template>

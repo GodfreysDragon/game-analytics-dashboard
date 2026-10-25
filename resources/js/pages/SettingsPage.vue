@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { api } from '../lib/api';
 import { number, timeAgo } from '../lib/format';
-import { loadGames, state } from '../lib/store';
+import { DEMO, loadGames, state } from '../lib/store';
 
 const newName = ref('');
 const formError = ref('');
@@ -64,7 +64,7 @@ async function copy(text) {
                         <td class="font-mono text-xs text-ink-2">{{ g.ingest_key_prefix }}••••••••</td>
                         <td class="text-right">{{ number(g.players_count, { exact: true }) }}</td>
                         <td class="text-right text-ink-2">{{ timeAgo(g.last_event_at) }}</td>
-                        <td class="text-right"><button type="button" class="btn !py-1 text-xs" @click="rotate(g)">Rotate key</button></td>
+                        <td class="text-right"><button type="button" class="btn !py-1 text-xs" :disabled="DEMO" @click="rotate(g)">Rotate key</button></td>
                     </tr>
                 </tbody>
             </table>
@@ -82,9 +82,9 @@ async function copy(text) {
         <form class="card flex flex-wrap items-end gap-3 p-4" @submit.prevent="create">
             <label class="block flex-1 space-y-1">
                 <span class="label">Register a game</span>
-                <input v-model="newName" class="field w-full" placeholder="Game name" required maxlength="100" />
+                <input v-model="newName" class="field w-full" placeholder="Game name" required maxlength="100" :disabled="DEMO" />
             </label>
-            <button type="submit" class="btn btn-primary">Create &amp; issue key</button>
+            <button type="submit" class="btn btn-primary" :disabled="DEMO">Create &amp; issue key</button>
             <p v-if="formError" class="w-full text-sm text-bad" role="alert">{{ formError }}</p>
         </form>
 

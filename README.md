@@ -45,6 +45,22 @@ php artisan analytics:simulate --http=http://localhost:8000 --key=gk_demo_starfa
 php artisan analytics:simulate
 ```
 
+## Hosted demo mode
+
+Set `DEMO_MODE=true` to run the dashboard as a public demo:
+
+- **Read-only.** Visitors share the seeded account, so creating games, rotating keys and saving or deleting funnels
+  return a 403. The UI disables those controls, and the login form is pre-filled. The funnel builder still previews
+  edits live.
+- **Always current.** Schedule `php artisan schedule:run` every minute. Every five minutes it runs
+  `analytics:demo-refresh`, which replays the seeded simulation up to the current time and ingests only the events
+  that happened since the last run. The simulator is deterministic, uuids included, so the history the incremental
+  runs build is identical to building it from scratch at that moment (a test checks this). After midnight UTC the
+  window moves, so the command deletes and rebuilds the demo games. Expect about a minute of thin data while that
+  runs.
+
+The command refuses to run unless `DEMO_MODE=true`, because it deletes the demo games.
+
 ## Sending events
 
 ```http
@@ -144,6 +160,8 @@ Covered:
 - **Dashboard API:** auth, game isolation, filter validation, LIKE-wildcard escaping in player search, the stream's
   `after_id`.
 - **`analytics:simulate`:** direct writes, the HTTP path (with `Http::fake()`), a rejected key, bad arguments.
+- **Demo mode:** every write endpoint is refused while reads and funnel previews work, and `analytics:demo-refresh`
+  builds the games, adds only new events, matches a fresh build exactly, and rebuilds after the day rolls over.
 
 A browser smoke test signs in and opens every page in light and dark mode at desktop and 390px phone width. It fails on
 console errors, failed API calls or horizontal overflow. Run it against a seeded app that is already serving:

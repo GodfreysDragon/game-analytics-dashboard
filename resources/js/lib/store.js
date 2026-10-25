@@ -10,6 +10,9 @@ export const PRESETS = [
     { key: '90d', label: 'Last 90 days', days: 90 },
 ];
 
+/** Hosted demo: the dashboard is read-only, so write actions are disabled in the UI too. */
+export const DEMO = document.querySelector('meta[name="demo-mode"]')?.content === '1';
+
 /** Mirrors config('analytics.platforms'), which the API validates against. */
 export const PLATFORMS = ['ios', 'android', 'pc', 'web', 'console'];
 
