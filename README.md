@@ -1,5 +1,7 @@
 # Game Analytics Dashboard
 
+[![tests](https://github.com/GodfreysDragon/game-analytics-dashboard/actions/workflows/tests.yml/badge.svg)](https://github.com/GodfreysDragon/game-analytics-dashboard/actions/workflows/tests.yml)
+
 A self-hosted analytics backend for games, with a Vue admin dashboard on top. Game clients or servers send gameplay
 events to a Laravel ingestion API. The dashboard turns those events into KPIs, event trends, cohort retention, funnels
 and per-player timelines.
@@ -10,17 +12,29 @@ tactics game, so every chart has real data behind it.
 **Stack:** Laravel 13 · PHP 8.4 · Vue 3 + Vue Router · Tailwind 4 · SQLite by default (no driver-specific SQL, so
 MySQL and Postgres also work) · hand-built SVG charts (no chart library)
 
+![Overview: KPIs compared with the previous period, daily active players and revenue](docs/screenshots/overview.png)
+
+| Cohort retention | Funnel builder |
+|---|---|
+| ![Retention heatmap with the average retention curve](docs/screenshots/retention.png) | ![Onboarding funnel with per-platform conversion](docs/screenshots/funnels.png) |
+| **Event trends** | **Player profile** |
+| ![Daily volume for the top events and the event table](docs/screenshots/events.png) | ![A player's activity, sessions and event timeline](docs/screenshots/player.png) |
+
 ## Quick start
+
+Needs PHP 8.4, Composer and Node 22.
 
 ```sh
 composer install
 cp .env.example .env && php artisan key:generate
-php artisan migrate:fresh --seed     # ~250k simulated events; takes about 2 minutes
+php artisan migrate:fresh --seed     # ~280k simulated events; takes a minute or two
 npm install && npm run build
 php artisan serve                    # http://localhost:8000
 ```
 
 Sign in with **admin@example.com / password**.
+
+For a quicker look, seed less history: `DEMO_DAYS=14 php artisan migrate:fresh --seed` takes about 5 seconds.
 
 To stream live traffic while the dashboard is open (watch **Events → Live event stream**):
 
@@ -61,7 +75,8 @@ The response is `202 {"accepted": 1, "duplicates": 0, "new_players": 1}`.
 | Rule | Detail |
 |---|---|
 | Batches | 1–500 events. One invalid event rejects the whole batch with a 422 that names the field. |
-| Idempotency | `uuid` is unique per game. Resending a batch is safe: repeats are counted as `duplicates`. |
+| Idempotency | `uuid` is unique per game. Resending a batch is safe, even while the first attempt is still in flight: repeats are counted as `duplicates` and never double-count a rollup. |
+| Sessions | `session_id` only needs to be unique per player, so a per-device counter like `"1"`, `"2"` is fine. |
 | Names | snake_case, at most 64 characters. Unknown fields are rejected. |
 | Time window | No older than 30 days, and no more than 10 minutes in the future (to catch bad device clocks). Both are configurable in `config/analytics.php`. |
 | Properties | A JSON object with at most 50 keys and 4 KB when encoded. |
@@ -75,8 +90,9 @@ The response is `202 {"accepted": 1, "duplicates": 0, "new_players": 1}`.
 
 `App\Ingestion\EventIngestor` writes the raw `events` row and, in the same transaction, keeps three rollups in step:
 
-- **`players`**: first and last seen, latest device context, event and session counts, lifetime spend. Existing rows
-  are updated under `lockForUpdate`, and counters use `col = col + n`.
+- **`players`**: first and last seen, latest device context, event and session counts, lifetime spend. Rows are locked
+  with `lockForUpdate` before anything is counted, and counters use `col = col + n`. The duplicate check is repeated
+  once the locks are held, so two copies of a batch arriving at the same moment are counted once.
 - **`player_activity_days`**: one row per player per active UTC day, holding the player's `cohort_on` and `day_index`.
   DAU is a `COUNT(*)`. Cohort retention is `GROUP BY cohort_on, day_index`. Neither needs date maths in SQL, which
   keeps the queries portable and index-only.
@@ -112,18 +128,24 @@ player moves to the earlier cohort and their existing activity days are re-index
 ## Tests
 
 ```sh
-php artisan test     # 55 tests: ingestion, reports, dashboard API
+php artisan test     # ingestion, reports, dashboard API, simulator command
+vendor/bin/pint      # code style
 ```
 
 Covered:
 
-- **Ingestion:** key authentication, idempotent retries, duplicates inside a batch, late-event cohort moves, sessions
-  merged across batches, validation rules, the per-game rate limit, key rotation.
+- **Ingestion:** key authentication, idempotent retries (including one that commits while another request waits for
+  its locks), duplicates inside a batch, late-event cohort moves, sessions merged across batches and scoped per player,
+  validation rules, the per-game rate limit, key rotation.
 - **Retention:** matrix values, unobserved days, weighted averages, the platform filter.
 - **Funnels:** ordering, the window boundary, picking the best attempt, range edges, repeated step names, the platform
   breakdown.
 - **Overview:** KPIs, deltas, gap-filling.
-- **Dashboard API:** auth, game isolation, LIKE-wildcard escaping in player search, the stream's `after_id`.
+- **Dashboard API:** auth, game isolation, filter validation, LIKE-wildcard escaping in player search, the stream's
+  `after_id`.
+- **`analytics:simulate`:** direct writes, the HTTP path (with `Http::fake()`), a rejected key, bad arguments.
+
+GitHub Actions runs the suite, Pint and the frontend build on every push and pull request.
 
 ## Simulated storyline
 
@@ -135,3 +157,40 @@ to find:
   It shows as a spike in new players and weaker cohorts.
 - Client 1.4.0 ships 14 days before today with a tutorial fix. Tutorial completion rises from about 60% to 80%.
   Compare the **Onboarding** funnel over the last 14 days with an earlier range.
+
+## Design decisions and trade-offs
+
+- **Rollups are written with the raw events, not by a job.** Reports read small, pre-shaped tables (DAU is a
+  `COUNT(*)`, retention is one `GROUP BY`), so they stay fast without a warehouse. The price is a heavier write: a batch
+  of 500 events commits in one transaction. That is fine for a self-hosted game of modest size, and a retry after a
+  timeout is always safe.
+- **Portable SQL only.** Dates are denormalised into `*_on` columns at write time, so nothing needs `DATE()`,
+  `date_trunc` or window functions. The same queries run on SQLite, MySQL and Postgres.
+- **Funnels are evaluated in PHP.** Events are streamed with a cursor and walked per player. Ordered, windowed,
+  best-attempt funnels are awkward to express portably in SQL; in PHP the logic is short, readable and fully tested.
+  It is the slowest report (0.2–1 s on the seeded data) and the first thing to move if volume grew.
+- **Charts are hand-built SVG.** No chart library: each chart is a small Vue component with tooltips, keyboard focus
+  and a table view, and the colour palette is checked for colour-blind separation in light and dark modes.
+- **UTC calendar days throughout.** The last day of a range is partial, and the DAU chart says so.
+
+## Known limitations
+
+- **Segments use the player's latest device context.** Filtering retention or funnels by platform uses the platform
+  the player most recently reported, not the one each event was sent from.
+- **Single tenant.** Every signed-in admin can see every game, and the only account is the seeded one. A game–user
+  pivot and a policy would slot in behind the existing `scopeBindings` routes.
+- **Not built for millions of events a day.** Ingestion is synchronous and `events` is a single table.
+
+## Roadmap
+
+1. Queue ingestion (write raw events, roll up in a job) and partition or archive `events` by month.
+2. Property breakdowns (e.g. `level_fail` by `properties.level`) using generated columns or a property table.
+3. Saved segments (platform, country, app version, payer) applied to every report.
+4. CSV export from each table view, and scheduled email digests.
+5. Funnel comparison: two date ranges side by side, e.g. before and after the 1.4.0 tutorial fix.
+6. Revenue reports: LTV curves by cohort and a breakdown of purchases by item.
+7. An `artisan make:admin` command and password reset.
+
+## License
+
+[MIT](LICENSE)
