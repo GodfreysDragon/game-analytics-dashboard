@@ -14,7 +14,7 @@ class DatabaseSeeder extends Seeder
 {
     /**
      * Fixed keys so the README's curl example and `analytics:simulate --http` work out of the box.
-     * Only used outside production; production games get random keys.
+     * Only used in local and testing environments; anywhere else games get random keys.
      */
     public const DEMO_KEYS = [
         'starfall-tactics' => 'gk_demo_starfall_tactics_local_only',
@@ -28,13 +28,15 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Demo Admin', 'password' => 'password'],
         );
 
-        $this->seedGame($ingestor, 'Starfall Tactics', days: 60, installsPerDay: 38, seed: 1337, funnels: [
+        $days = max(1, (int) config('analytics.demo_days'));
+
+        $this->seedGame($ingestor, 'Starfall Tactics', days: $days, installsPerDay: 38, seed: 1337, funnels: [
             ['name' => 'Onboarding', 'steps' => ['first_open', 'tutorial_start', 'tutorial_complete', 'level_complete'], 'window_minutes' => 60],
             ['name' => 'Store conversion', 'steps' => ['session_start', 'store_open', 'purchase'], 'window_minutes' => 120],
             ['name' => 'Fail → retry → win', 'steps' => ['level_fail', 'level_start', 'level_complete'], 'window_minutes' => 30],
         ]);
 
-        $this->seedGame($ingestor, 'Pocket Harvest', days: 30, installsPerDay: 9, seed: 42, funnels: [
+        $this->seedGame($ingestor, 'Pocket Harvest', days: min(30, $days), installsPerDay: 9, seed: 42, funnels: [
             ['name' => 'Onboarding', 'steps' => ['first_open', 'tutorial_start', 'tutorial_complete'], 'window_minutes' => 60],
         ]);
     }
@@ -53,7 +55,7 @@ class DatabaseSeeder extends Seeder
         }
 
         $game = new Game(['name' => $name, 'slug' => $slug]);
-        $key = app()->isProduction() ? $game->rotateIngestKey() : $this->useDemoKey($game, self::DEMO_KEYS[$slug]);
+        $key = app()->environment('local', 'testing') ? $this->useDemoKey($game, self::DEMO_KEYS[$slug]) : $game->rotateIngestKey();
 
         foreach ($funnels as $funnel) {
             $game->funnels()->create($funnel);

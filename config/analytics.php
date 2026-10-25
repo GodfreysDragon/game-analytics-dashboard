@@ -30,4 +30,16 @@ return [
 
     'platforms' => ['ios', 'android', 'pc', 'web', 'console'],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Demo data
+    |--------------------------------------------------------------------------
+    |
+    | Days of history the database seeder simulates. Fewer days seed faster,
+    | e.g. DEMO_DAYS=14 php artisan migrate:fresh --seed for a quick look.
+    |
+    */
+
+    'demo_days' => (int) env('DEMO_DAYS', 60),
+
 ];
