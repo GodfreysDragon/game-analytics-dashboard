@@ -35,6 +35,7 @@ class RefreshDemoCommandTest extends TestCase
         $this->artisan('analytics:demo-refresh')->assertSuccessful();
 
         $this->assertEqualsCanonicalizing(['starfall-tactics', 'pocket-harvest'], Game::pluck('slug')->all());
+        $this->assertDatabaseHas('users', ['email' => 'admin@example.com']);
         $this->assertSame(3, Game::firstWhere('slug', 'starfall-tactics')->funnels()->count());
         $this->assertGreaterThan(0, Event::count());
         $this->assertLessThanOrEqual('2026-06-15 19:00:00.000', Event::max('occurred_at'));

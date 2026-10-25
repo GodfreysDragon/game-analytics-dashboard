@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Game;
-use App\Models\User;
 use App\Simulation\DemoDataset;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
@@ -12,10 +11,7 @@ class DatabaseSeeder extends Seeder
 {
     public function run(DemoDataset $dataset): void
     {
-        User::query()->updateOrCreate(
-            ['email' => 'admin@example.com'],
-            ['name' => 'Demo Admin', 'password' => 'password'],
-        );
+        $dataset->ensureDemoUser();
 
         $now = CarbonImmutable::now('UTC');
 

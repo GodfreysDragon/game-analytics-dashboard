@@ -20,6 +20,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // Resolve the game before throttling so the ingest limit is counted per game, not per IP.
         $middleware->prependToPriorityList(before: ThrottleRequests::class, prepend: AuthenticateIngestKey::class);
         $middleware->redirectGuestsTo('/login');
+
+        // Behind a TLS-terminating proxy (Cloud Run, a load balancer), trust its forwarded headers
+        // so generated URLs use https. Set TRUSTED_PROXIES to "*" or a comma-separated list.
+        if ($proxies = env('TRUSTED_PROXIES')) {
+            $middleware->trustProxies(at: $proxies === '*' ? '*' : array_map('trim', explode(',', $proxies)));
+        }
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

@@ -4,6 +4,7 @@ namespace App\Simulation;
 
 use App\Ingestion\EventIngestor;
 use App\Models\Game;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
@@ -24,6 +25,17 @@ final class DemoDataset
     ];
 
     public function __construct(private EventIngestor $ingestor) {}
+
+    /**
+     * The shared account visitors sign in with.
+     */
+    public function ensureDemoUser(): void
+    {
+        User::query()->firstOrCreate(
+            ['email' => 'admin@example.com'],
+            ['name' => 'Demo Admin', 'password' => 'password'],
+        );
+    }
 
     /**
      * @return list<array{name: string, slug: string, days: int, installs_per_day: float, seed: int, funnels: list<array{name: string, steps: list<string>, window_minutes: int}>}>

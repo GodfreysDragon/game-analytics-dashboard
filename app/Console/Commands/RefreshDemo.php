@@ -22,6 +22,7 @@ class RefreshDemo extends Command
         }
 
         $now = CarbonImmutable::now('UTC');
+        $dataset->ensureDemoUser();
 
         foreach ($dataset->games() as $definition) {
             $game = Game::where('slug', $definition['slug'])->first();
