@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\AuthenticateIngestKey;
+use App\Http\Middleware\BlockDemoWrites;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -15,7 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->alias(['ingest.key' => AuthenticateIngestKey::class]);
+        $middleware->alias(['ingest.key' => AuthenticateIngestKey::class, 'demo.read-only' => BlockDemoWrites::class]);
         // Resolve the game before throttling so the ingest limit is counted per game, not per IP.
         $middleware->prependToPriorityList(before: ThrottleRequests::class, prepend: AuthenticateIngestKey::class);
         $middleware->redirectGuestsTo('/login');

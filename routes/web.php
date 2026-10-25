@@ -19,8 +19,8 @@ Route::prefix('api/admin')->name('admin.')->group(function () {
 
     Route::middleware('auth')->group(function () {
         Route::get('games', [GameController::class, 'index'])->name('games.index');
-        Route::post('games', [GameController::class, 'store'])->name('games.store');
-        Route::post('games/{game}/rotate-key', [GameController::class, 'rotateKey'])->name('games.rotate-key');
+        Route::post('games', [GameController::class, 'store'])->middleware('demo.read-only')->name('games.store');
+        Route::post('games/{game}/rotate-key', [GameController::class, 'rotateKey'])->middleware('demo.read-only')->name('games.rotate-key');
 
         Route::prefix('games/{game}')->scopeBindings()->group(function () {
             Route::get('overview', [ReportController::class, 'overview'])->name('reports.overview');
@@ -31,7 +31,8 @@ Route::prefix('api/admin')->name('admin.')->group(function () {
 
             Route::get('funnels/preview', [FunnelController::class, 'preview'])->name('funnels.preview');
             Route::get('funnels/{funnel}/report', [FunnelController::class, 'report'])->name('funnels.report');
-            Route::apiResource('funnels', FunnelController::class)->except('show');
+            Route::get('funnels', [FunnelController::class, 'index'])->name('funnels.index');
+            Route::apiResource('funnels', FunnelController::class)->only(['store', 'update', 'destroy'])->middleware('demo.read-only');
 
             Route::get('players', [PlayerController::class, 'index'])->name('players.index');
             Route::get('players/{player}', [PlayerController::class, 'show'])->name('players.show');

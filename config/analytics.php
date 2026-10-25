@@ -42,4 +42,16 @@ return [
 
     'demo_days' => (int) env('DEMO_DAYS', 60),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Hosted demo
+    |--------------------------------------------------------------------------
+    |
+    | Makes the dashboard read-only (visitors share the seeded account) and
+    | lets the scheduler keep the demo data current with analytics:demo-refresh.
+    |
+    */
+
+    'demo_mode' => (bool) env('DEMO_MODE', false),
+
 ];
