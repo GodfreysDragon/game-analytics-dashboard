@@ -195,7 +195,7 @@ watch(() => draft.steps.length, (n) => n > MAX_STEPS && draft.steps.splice(MAX_S
             <div v-else-if="!definitionValid" class="card p-8 text-center text-sm text-muted">Add at least two steps to see results.</div>
 
             <ChartCard v-if="data && data.breakdown.length > 1 && !state.platform" title="Conversion by platform" subtitle="Entered → completed, per platform" :loading="loading" :table-toggle="false">
-                <div class="overflow-x-auto">
+                <div class="relative overflow-x-auto">
                     <table class="data-table">
                         <thead>
                             <tr>

@@ -145,7 +145,16 @@ Covered:
   `after_id`.
 - **`analytics:simulate`:** direct writes, the HTTP path (with `Http::fake()`), a rejected key, bad arguments.
 
-GitHub Actions runs the suite, Pint and the frontend build on every push and pull request.
+A browser smoke test signs in and opens every page in light and dark mode at desktop and 390px phone width. It fails on
+console errors, failed API calls or horizontal overflow. Run it against a seeded app that is already serving:
+
+```sh
+npx playwright-core install chromium   # once
+npm run test:e2e                       # BASE_URL defaults to http://127.0.0.1:8000
+```
+
+GitHub Actions runs the PHPUnit suite, Pint, the frontend build and the browser smoke test on every push and pull
+request.
 
 ## Simulated storyline
 
@@ -183,13 +192,15 @@ to find:
 
 ## Roadmap
 
-1. Queue ingestion (write raw events, roll up in a job) and partition or archive `events` by month.
-2. Property breakdowns (e.g. `level_fail` by `properties.level`) using generated columns or a property table.
-3. Saved segments (platform, country, app version, payer) applied to every report.
-4. CSV export from each table view, and scheduled email digests.
-5. Funnel comparison: two date ranges side by side, e.g. before and after the 1.4.0 tutorial fix.
-6. Revenue reports: LTV curves by cohort and a breakdown of purchases by item.
-7. An `artisan make:admin` command and password reset.
+Tracked as [GitHub issues](https://github.com/GodfreysDragon/game-analytics-dashboard/issues):
+
+1. [Queue ingestion and partition or archive `events`](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/3)
+2. [Property breakdowns, e.g. `level_fail` by `properties.level`](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/4)
+3. [Saved segments applied to every report](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/5)
+4. [CSV export from table views, and scheduled email digests](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/6)
+5. [Funnel comparison: two date ranges side by side](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/7)
+6. [Revenue reports: LTV curves by cohort and purchases by item](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/8)
+7. [Admin accounts: `make:admin`, password reset, per-game access](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/9)
 
 ## License
 
