@@ -95,7 +95,7 @@ if (game.value) api.get(`/games/${game.value.id}/events/catalog`).then((r) => (c
         </ChartCard>
 
         <ChartCard v-if="data" title="Events in range" :subtitle="`${data.events.length} event types`" :loading="loading" :table-toggle="false">
-            <div class="overflow-x-auto">
+            <div class="relative overflow-x-auto">
                 <table class="data-table">
                     <thead>
                         <tr>

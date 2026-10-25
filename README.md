@@ -145,7 +145,16 @@ Covered:
   `after_id`.
 - **`analytics:simulate`:** direct writes, the HTTP path (with `Http::fake()`), a rejected key, bad arguments.
 
-GitHub Actions runs the suite, Pint and the frontend build on every push and pull request.
+A browser smoke test signs in and opens every page in light and dark mode at desktop and 390px phone width. It fails on
+console errors, failed API calls or horizontal overflow. Run it against a seeded app that is already serving:
+
+```sh
+npx playwright-core install chromium   # once
+npm run test:e2e                       # BASE_URL defaults to http://127.0.0.1:8000
+```
+
+GitHub Actions runs the PHPUnit suite, Pint, the frontend build and the browser smoke test on every push and pull
+request.
 
 ## Simulated storyline
 

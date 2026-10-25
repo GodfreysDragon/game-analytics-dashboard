@@ -53,7 +53,7 @@ async function copy(text) {
 
 <template>
     <div class="space-y-5">
-        <section class="card overflow-x-auto">
+        <section class="card relative overflow-x-auto">
             <table class="data-table">
                 <thead>
                     <tr><th>Game</th><th>Ingest key</th><th class="text-right">Players</th><th class="text-right">Last event</th><th><span class="sr-only">Actions</span></th></tr>
