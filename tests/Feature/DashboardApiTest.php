@@ -183,6 +183,37 @@ class DashboardApiTest extends TestCase
             ->assertJsonPath('steps.1.players', 0);
     }
 
+    public function test_a_funnel_can_be_compared_with_the_previous_period(): void
+    {
+        $this->ingest($this->game, [
+            // Previous period (Jun 13): two entries, one completes.
+            $this->event('first_open', 'alice', '2026-06-13 10:00'),
+            $this->event('first_open', 'bob', '2026-06-13 11:00'),
+            $this->event('tutorial_complete', 'bob', '2026-06-13 11:05'),
+            // Requested range (Jun 14): one entry, which completes.
+            $this->event('first_open', 'carol', '2026-06-14 10:00'),
+            $this->event('tutorial_complete', 'carol', '2026-06-14 10:02'),
+        ]);
+        $funnel = $this->game->funnels()->create(['name' => 'Onboarding', 'steps' => ['first_open', 'tutorial_complete'], 'window_minutes' => 30]);
+        $this->actingAs(User::factory()->create());
+        $range = ['from' => '2026-06-14', 'to' => '2026-06-14'];
+
+        foreach ([
+            "/api/admin/games/{$this->game->id}/funnels/{$funnel->id}/report?",
+            "/api/admin/games/{$this->game->id}/funnels/preview?".http_build_query(['steps' => $funnel->steps, 'window_minutes' => 30]).'&',
+        ] as $uri) {
+            $this->getJson($uri.http_build_query([...$range, 'compare' => 1]))
+                ->assertOk()
+                ->assertJsonPath('steps.1.conversion', 1)
+                ->assertJsonPath('comparison.range.from', '2026-06-13')
+                ->assertJsonPath('comparison.range.to', '2026-06-13')
+                ->assertJsonPath('comparison.steps.0.players', 2)
+                ->assertJsonPath('comparison.steps.1.conversion', 0.5);
+
+            $this->getJson($uri.http_build_query($range))->assertOk()->assertJsonMissingPath('comparison');
+        }
+    }
+
     public function test_funnel_definitions_are_validated(): void
     {
         $this->actingAs(User::factory()->create())

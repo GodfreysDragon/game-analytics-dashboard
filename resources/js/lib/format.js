@@ -27,6 +27,13 @@ export function signedPercent(value) {
     return `${sign}${Math.abs(value * 100).toFixed(1)}%`;
 }
 
+/** Difference between two rates in percentage points: 0.182 -> "+18.2 pts". */
+export function signedPoints(value) {
+    if (isMissing(value)) return null;
+    const sign = value > 0 ? '+' : value < 0 ? '−' : '±';
+    return `${sign}${Math.abs(value * 100).toFixed(1)} pts`;
+}
+
 export function duration(seconds) {
     if (isMissing(seconds)) return '–';
     if (seconds < 60) return `${Math.round(seconds)}s`;

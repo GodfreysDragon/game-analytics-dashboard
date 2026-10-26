@@ -25,6 +25,7 @@ class ReportRequest extends FormRequest
             'from' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
             'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
             'platform' => ['nullable', 'string', 'in:'.implode(',', config('analytics.platforms'))],
+            'compare' => ['nullable', 'boolean'],
         ];
     }
 
@@ -54,5 +55,13 @@ class ReportRequest extends FormRequest
     public function platform(): ?string
     {
         return $this->input('platform') ?: null;
+    }
+
+    /**
+     * Whether to add the equally long period just before the range, for comparison.
+     */
+    public function wantsComparison(): bool
+    {
+        return $this->boolean('compare');
     }
 }
