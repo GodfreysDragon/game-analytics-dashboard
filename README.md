@@ -9,6 +9,10 @@ and per-player timelines.
 It doesn't include any gameplay code. A seeded simulator produces 60 days of realistic telemetry for a fictional
 tactics game, so every chart has real data behind it.
 
+**[Live demo →](https://game-analytics-dashboard-83041511669.us-west1.run.app)** Read-only, with the sign-in pre-filled.
+New simulated events arrive every ten minutes. It runs on Google Cloud Run's free tier and scales to zero, so the first
+page after a quiet spell takes a few seconds to load.
+
 **Stack:** Laravel 13 · PHP 8.4 · Vue 3 + Vue Router · Tailwind 4 · SQLite by default (no driver-specific SQL, so
 MySQL and Postgres also work) · hand-built SVG charts (no chart library)
 
