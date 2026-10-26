@@ -30,6 +30,17 @@ class DemoRefreshEndpointTest extends TestCase
         $this->assertSame(2, Game::count());
     }
 
+    public function test_each_call_spends_a_limited_time_on_a_rebuild(): void
+    {
+        config(['analytics.demo_build_seconds' => 0]);
+
+        $this->withToken(self::TOKEN)->postJson('/api/internal/demo-refresh')
+            ->assertOk()
+            ->assertJsonPath('output', fn (string $output) => str_contains($output, 'continuing on the next run'));
+
+        $this->assertTrue(Game::where('building', true)->where('name', 'Starfall Tactics')->exists());
+    }
+
     public function test_it_is_hidden_without_the_right_token(): void
     {
         $this->postJson('/api/internal/demo-refresh')->assertNotFound();

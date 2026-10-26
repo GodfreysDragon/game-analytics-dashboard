@@ -57,4 +57,8 @@ return [
     // Bearer token for POST /api/internal/demo-refresh. Leave empty to disable the endpoint.
     'demo_refresh_token' => env('DEMO_REFRESH_TOKEN'),
 
+    // Scheduled refreshes spend at most this long per game on a rebuild, then carry on with it on
+    // the next run, so each call ends well inside a request timeout.
+    'demo_build_seconds' => (int) env('DEMO_BUILD_SECONDS', 480),
+
 ];

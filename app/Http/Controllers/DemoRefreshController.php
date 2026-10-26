@@ -30,9 +30,9 @@ class DemoRefreshController extends Controller
         }
 
         try {
-            // A rebuild after midnight UTC takes minutes against a remote database.
+            // A rebuild after midnight UTC takes minutes against a remote database, a few at a time.
             set_time_limit(0);
-            $exitCode = Artisan::call('analytics:demo-refresh');
+            $exitCode = Artisan::call('analytics:demo-refresh', ['--max-seconds' => config('analytics.demo_build_seconds')]);
 
             return response()->json(
                 ['output' => trim(Artisan::output())],

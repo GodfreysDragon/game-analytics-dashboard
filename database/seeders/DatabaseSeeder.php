@@ -25,7 +25,7 @@ class DatabaseSeeder extends Seeder
             $this->command?->info("Simulating {$definition['days']} days of {$definition['name']}...");
 
             [$game, $key] = $dataset->create($definition);
-            $accepted = $dataset->replay($game, $definition, $now);
+            $accepted = $dataset->replay($game, $definition, $now)['accepted'];
 
             $this->command?->info(sprintf('  %s events, %s players. Ingest key: %s', number_format($accepted), number_format($game->players()->count()), $key));
         }

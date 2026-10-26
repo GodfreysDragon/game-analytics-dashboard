@@ -57,10 +57,13 @@ export const range = computed(() => {
 });
 
 export async function loadGames() {
+    const slug = game.value?.slug;
     const { data } = await api.get('/games');
     state.games = data;
-    // Default to the game with the most players rather than whichever sorts first.
-    if (!data.some((g) => g.id === state.gameId)) state.gameId = [...data].sort((a, b) => b.players_count - a.players_count)[0]?.id ?? null;
+    if (data.some((g) => g.id === state.gameId)) return;
+    // A demo rebuild replaces a game under a new id, so stay on the same game. Otherwise default
+    // to the game with the most players rather than whichever sorts first.
+    state.gameId = (data.find((g) => g.slug === slug) ?? [...data].sort((a, b) => b.players_count - a.players_count)[0])?.id ?? null;
 }
 
 export function applyTheme(theme) {

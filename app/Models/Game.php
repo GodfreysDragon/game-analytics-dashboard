@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -20,8 +22,18 @@ class Game extends Model
     protected function casts(): array
     {
         return [
+            'building' => 'boolean',
             'ingest_key_rotated_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Games the dashboard lists: not a demo history that is still being built.
+     */
+    #[Scope]
+    protected function visible(Builder $query): void
+    {
+        $query->where('building', false);
     }
 
     public static function hashKey(string $plainKey): string

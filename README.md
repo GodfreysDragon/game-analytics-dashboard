@@ -55,9 +55,10 @@ Set `DEMO_MODE=true` to run the dashboard as a public demo:
 - **Always current.** Schedule `php artisan schedule:run` every minute. Every five minutes it runs
   `analytics:demo-refresh`, which replays the seeded simulation up to the current time and ingests only the events
   that happened since the last run. The simulator is deterministic, uuids included, so the history the incremental
-  runs build is identical to building it from scratch at that moment (a test checks this). After midnight UTC the
-  window moves, so the command deletes and rebuilds the demo games. Expect about a minute of thin data while that
-  runs.
+  runs build is identical to building it from scratch at that moment (a test checks this).
+- **No gap at midnight.** After midnight UTC the window moves, so the history is simulated again. The new copy is
+  built out of sight, eight minutes per game per run at most (`DEMO_BUILD_SECONDS`), and swapped in within one
+  transaction once it is complete. Until then, visitors see the previous history.
 
 The command refuses to run unless `DEMO_MODE=true`, because it deletes the demo games.
 
@@ -69,19 +70,20 @@ Hosts that keep no process alive for `schedule:run` can call `POST /api/internal
 The [`Dockerfile`](Dockerfile) builds a production image (FrankenPHP on Alpine, about 400 MB), and
 [`deploy/cloud-run.sh`](deploy/cloud-run.sh) deploys it with a Postgres database, such as Supabase's free tier.
 The script creates the secrets, builds with Cloud Build, deploys the service, and sets up a Cloud Scheduler job
-that calls the refresh endpoint every ten minutes:
+that calls the refresh endpoint every twenty minutes:
 
 ```sh
 gcloud auth login
 PROJECT_ID=my-project DATABASE_URL='postgresql://user:pass@host:5432/postgres?sslmode=require' deploy/cloud-run.sh
 ```
 
-- **Free tier:** one instance at most, scaled to zero when idle. A ten-minute refresh uses about 60k of the
-  180k free vCPU-seconds a month. Google still requires a billing account, so set a budget alert.
+- **Free tier:** one instance at most, scaled to zero when idle. The twenty-minute refresh and the nightly rebuild
+  use about 100k of the 180k free vCPU-seconds a month. Google still requires a billing account, so set a budget
+  alert.
 - **Supabase:** use the session pooler connection string. The direct connection is IPv6-only, and Cloud Run
   connects over IPv4.
-- **Nightly rebuild:** against a remote database the rebuild after midnight UTC takes several minutes, so the
-  charts are thin for a while.
+- **Nightly rebuild:** against a remote database the rebuild takes about half an hour, spread over the first few
+  refreshes after midnight UTC. The database briefly holds both copies, about twice the demo's usual 120 MB.
 
 ## Sending events
 
@@ -183,7 +185,8 @@ Covered:
   `after_id`.
 - **`analytics:simulate`:** direct writes, the HTTP path (with `Http::fake()`), a rejected key, bad arguments.
 - **Demo mode:** every write endpoint is refused while reads and funnel previews work, and `analytics:demo-refresh`
-  builds the games, adds only new events, matches a fresh build exactly, and rebuilds after the day rolls over.
+  builds the games, adds only new events, matches a fresh build exactly, and rebuilds after the day rolls over,
+  in steps if needed, without ever listing a half-built game.
 
 A browser smoke test signs in and opens every page in light and dark mode at desktop and 390px phone width. It fails on
 console errors, failed API calls or horizontal overflow. Run it against a seeded app that is already serving:

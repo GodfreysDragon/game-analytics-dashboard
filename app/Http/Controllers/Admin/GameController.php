@@ -16,6 +16,7 @@ class GameController extends Controller
     public function index(): AnonymousResourceCollection
     {
         $games = Game::query()
+            ->visible()
             ->withCount('players')
             ->withMax('events as last_event_at', 'received_at')
             ->orderBy('name')
