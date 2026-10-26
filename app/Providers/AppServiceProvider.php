@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Foundation\Console\ServeCommand;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -27,5 +28,9 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('login', fn (Request $request) => Limit::perMinute(10)
             ->by(mb_strtolower((string) $request->input('email')).'|'.$request->ip()));
+
+        // `artisan serve` strips TEMP and TMP from the server process. On Windows SQLite then has
+        // nowhere to spill large sorts, and the events and funnel reports fail with "unable to open database file".
+        ServeCommand::$passthroughVariables = array_values(array_unique([...ServeCommand::$passthroughVariables, 'TEMP', 'TMP']));
     }
 }
