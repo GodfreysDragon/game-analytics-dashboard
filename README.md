@@ -16,7 +16,7 @@ MySQL and Postgres also work) · hand-built SVG charts (no chart library)
 
 | Cohort retention | Funnel builder |
 |---|---|
-| ![Retention heatmap with the average retention curve](docs/screenshots/retention.png) | ![Onboarding funnel with per-platform conversion](docs/screenshots/funnels.png) |
+| ![Retention heatmap with the average retention curve](docs/screenshots/retention.png) | ![Onboarding funnel compared with the previous 14 days: tutorial completion up 21 points after the 1.4.0 fix](docs/screenshots/funnels.png) |
 | **Event trends** | **Player profile** |
 | ![Daily volume for the top events and the event table](docs/screenshots/events.png) | ![A player's activity, sessions and event timeline](docs/screenshots/player.png) |
 
@@ -147,7 +147,7 @@ player moves to the earlier cohort and their existing activity days are re-index
 | `OverviewReport` | KPIs (active players, average DAU, new players, stickiness, sessions, session length, revenue, payers, ARPDAU, ARPPU), each compared with the previous period of equal length. Daily series are gap-filled. |
 | `EventsReport` | Volume, unique players, reach and per-player rate for each event name, plus daily trends for up to 4 names. |
 | `RetentionReport` | Classic N-day cohort matrix (7, 14 or 30 days). Days that haven't happened yet are `null`, not `0`, and are left out of the size-weighted averages. Can be filtered by platform. |
-| `FunnelReport` | Ordered steps within a conversion window that starts at entry. Entry has to fall inside the date range, but later steps may finish after it. When a player enters several times, the attempt that got furthest counts. Also returns the median time between steps and a per-platform breakdown. Events are streamed with a cursor and evaluated per player in PHP, so the same code runs on any database. |
+| `FunnelReport` | Ordered steps within a conversion window that starts at entry. Entry has to fall inside the date range, but later steps may finish after it. When a player enters several times, the attempt that got furthest counts. Also returns the median time between steps and a per-platform breakdown, and with `compare=1` the same funnel over the equally long period before the range. Events are streamed with a cursor and evaluated per player in PHP, so the same code runs on any database. |
 
 ### Dashboard
 
@@ -205,7 +205,8 @@ to find:
 - A three-day paid user-acquisition burst (around 40% of the way through the range) brings lower-intent installs.
   It shows as a spike in new players and weaker cohorts.
 - Client 1.4.0 ships 14 days before today with a tutorial fix. Tutorial completion rises from about 60% to 80%.
-  Compare the **Onboarding** funnel over the last 14 days with an earlier range.
+  Open the **Onboarding** funnel over the last 14 days and tick *Compare with previous 14 days*: tutorial completion
+  shows about +20 points.
 
 ## Design decisions and trade-offs
 
@@ -238,9 +239,8 @@ Tracked as [GitHub issues](https://github.com/GodfreysDragon/game-analytics-dash
 2. [Property breakdowns, e.g. `level_fail` by `properties.level`](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/4)
 3. [Saved segments applied to every report](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/5)
 4. [CSV export from table views, and scheduled email digests](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/6)
-5. [Funnel comparison: two date ranges side by side](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/7)
-6. [Revenue reports: LTV curves by cohort and purchases by item](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/8)
-7. [Admin accounts: `make:admin`, password reset, per-game access](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/9)
+5. [Revenue reports: LTV curves by cohort and purchases by item](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/8)
+6. [Admin accounts: `make:admin`, password reset, per-game access](https://github.com/GodfreysDragon/game-analytics-dashboard/issues/9)
 
 ## License
 

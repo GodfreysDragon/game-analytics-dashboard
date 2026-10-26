@@ -46,7 +46,7 @@ class FunnelController extends Controller
     {
         return response()->json([
             'funnel' => new FunnelResource($funnel),
-            ...$report->build($game, $funnel->steps, $funnel->window_minutes, $request->range(), $request->platform()),
+            ...$this->build($request, $report, $game, $funnel->steps, $funnel->window_minutes),
         ]);
     }
 
@@ -55,12 +55,27 @@ class FunnelController extends Controller
      */
     public function preview(FunnelPreviewRequest $request, Game $game, FunnelReport $report): JsonResponse
     {
-        return response()->json($report->build(
-            $game,
-            $request->validated('steps'),
-            (int) $request->validated('window_minutes'),
-            $request->range(),
-            $request->platform(),
-        ));
+        return response()->json(
+            $this->build($request, $report, $game, $request->validated('steps'), (int) $request->validated('window_minutes')),
+        );
+    }
+
+    /**
+     * Run the funnel over the requested range and, with ?compare=1, over the equally long period
+     * just before it, so a change such as a client release can be read off step by step.
+     *
+     * @param  list<string>  $steps
+     * @return array<string, mixed>
+     */
+    private function build(ReportRequest $request, FunnelReport $report, Game $game, array $steps, int $windowMinutes): array
+    {
+        $result = $report->build($game, $steps, $windowMinutes, $request->range(), $request->platform());
+
+        if ($request->wantsComparison()) {
+            $previous = $report->build($game, $steps, $windowMinutes, $request->range()->previous(), $request->platform());
+            $result['comparison'] = ['range' => $previous['range'], 'steps' => $previous['steps']];
+        }
+
+        return $result;
     }
 }

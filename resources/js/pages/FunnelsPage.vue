@@ -4,7 +4,7 @@ import ChartCard from '../components/ChartCard.vue';
 import FunnelChart from '../components/charts/FunnelChart.vue';
 import { platformColor } from '../components/charts/scale';
 import { api } from '../lib/api';
-import { duration, eventLabel, minutesLabel, number, percent } from '../lib/format';
+import { duration, eventLabel, minutesLabel, number, percent, signedPoints } from '../lib/format';
 import { DEMO, game, range, state } from '../lib/store';
 import { useReport } from '../lib/useReport';
 
@@ -16,6 +16,8 @@ const catalog = ref([]);
 const draft = reactive({ id: null, name: '', steps: [], window_minutes: 60 });
 const saving = ref(false);
 const formError = ref('');
+/** Also run the funnel over the equally long period before the range. */
+const compare = ref(false);
 
 const saved = computed(() => funnels.value.find((f) => f.id === draft.id) ?? null);
 const dirty = computed(
@@ -45,7 +47,7 @@ api.get(`/games/${game.value.id}/events/catalog`).then((r) => (catalog.value = r
 const { data, loading, error } = useReport(
     () => {
         if (!definitionValid.value) return null;
-        const filters = { ...range.value, platform: state.platform };
+        const filters = { ...range.value, platform: state.platform, compare: compare.value ? 1 : null };
         return !dirty.value
             ? { url: `/games/${game.value.id}/funnels/${draft.id}/report`, params: filters }
             : { url: `/games/${game.value.id}/funnels/preview`, params: { ...filters, steps: draft.steps, window_minutes: draft.window_minutes } };
@@ -84,8 +86,14 @@ const summary = computed(() => {
     const steps = data.value?.steps ?? [];
     if (!steps.length) return null;
     const worst = steps.slice(1).reduce((w, s) => (w === null || (s.step_conversion ?? 1) < (w.step_conversion ?? 1) ? s : w), null);
-    return { entered: steps[0].players, completed: steps[steps.length - 1].players, conversion: steps[steps.length - 1].conversion, worst };
+    const before = data.value.comparison?.steps.at(-1)?.conversion;
+    const conversion = steps[steps.length - 1].conversion;
+    const change = before === undefined || before === null || conversion === null ? null : conversion - before;
+    return { entered: steps[0].players, completed: steps[steps.length - 1].players, conversion, change, worst };
 });
+
+/** The comparison rows, only once the response that carries them has arrived. */
+const previous = computed(() => (compare.value ? (data.value?.comparison?.steps ?? null) : null));
 
 watch(() => draft.steps.length, (n) => n > MAX_STEPS && draft.steps.splice(MAX_STEPS));
 </script>
@@ -160,7 +168,13 @@ watch(() => draft.steps.length, (n) => n > MAX_STEPS && draft.steps.splice(MAX_S
             <div v-if="summary" class="grid grid-cols-2 gap-3 transition-opacity xl:grid-cols-4" :class="loading ? 'opacity-50' : ''">
                 <div class="card p-4"><div class="text-sm text-ink-2">Entered</div><div class="mt-2 text-2xl font-semibold text-ink">{{ number(summary.entered) }}</div></div>
                 <div class="card p-4"><div class="text-sm text-ink-2">Completed</div><div class="mt-2 text-2xl font-semibold text-ink">{{ number(summary.completed) }}</div></div>
-                <div class="card p-4"><div class="text-sm text-ink-2">Overall conversion</div><div class="mt-2 text-2xl font-semibold text-ink">{{ percent(summary.conversion) }}</div></div>
+                <div class="card p-4">
+                    <div class="text-sm text-ink-2">Overall conversion</div>
+                    <div class="mt-2 text-2xl font-semibold text-ink">{{ percent(summary.conversion) }}</div>
+                    <div v-if="previous && summary.change !== null" class="mt-1 text-xs" :class="Math.abs(summary.change) < 0.0005 ? 'text-muted' : summary.change > 0 ? 'text-good' : 'text-bad'">
+                        {{ signedPoints(summary.change) }} <span class="text-muted">vs previous {{ data.range.days }} days</span>
+                    </div>
+                </div>
                 <div class="card p-4">
                     <div class="text-sm text-ink-2">Biggest drop-off</div>
                     <div class="mt-2 truncate font-mono text-base font-semibold text-ink">{{ summary.worst?.name ?? '–' }}</div>
@@ -171,14 +185,23 @@ watch(() => draft.steps.length, (n) => n > MAX_STEPS && draft.steps.splice(MAX_S
             <ChartCard
                 v-if="data"
                 :title="draft.name || 'Untitled funnel'"
-                :subtitle="`Ordered steps within ${minutesLabel(data.window_minutes)} of entering · entries ${data.range.from} to ${data.range.to}${state.platform ? ` · ${state.platform}` : ''}`"
+                :subtitle="`Ordered steps within ${minutesLabel(data.window_minutes)} of entering · entries ${data.range.from} to ${data.range.to}${state.platform ? ` · ${state.platform}` : ''}${previous ? ` · ticks mark ${data.comparison.range.from} to ${data.comparison.range.to}` : ''}`"
                 :loading="loading"
             >
-                <FunnelChart :steps="data.steps" />
+                <template #actions>
+                    <label class="flex cursor-pointer items-center gap-1.5 text-xs text-ink-2">
+                        <input v-model="compare" type="checkbox" class="accent-[var(--series-1)]" />
+                        Compare with previous {{ data.range.days }} days
+                    </label>
+                </template>
+                <FunnelChart :steps="data.steps" :previous="previous" />
                 <template #table>
                     <table class="data-table">
                         <thead>
-                            <tr><th>#</th><th>Step</th><th class="text-right">Players</th><th class="text-right">Overall</th><th class="text-right">From previous</th><th class="text-right">Median time</th></tr>
+                            <tr>
+                                <th>#</th><th>Step</th><th class="text-right">Players</th><th class="text-right">Overall</th><th class="text-right">From previous</th><th class="text-right">Median time</th>
+                                <template v-if="previous"><th class="text-right">Overall before</th><th class="text-right">Change</th></template>
+                            </tr>
                         </thead>
                         <tbody>
                             <tr v-for="(s, i) in data.steps" :key="i">
@@ -188,6 +211,10 @@ watch(() => draft.steps.length, (n) => n > MAX_STEPS && draft.steps.splice(MAX_S
                                 <td class="text-right">{{ percent(s.conversion) }}</td>
                                 <td class="text-right">{{ i ? percent(s.step_conversion) : '–' }}</td>
                                 <td class="text-right">{{ i ? duration(s.median_seconds) : '–' }}</td>
+                                <template v-if="previous">
+                                    <td class="text-right">{{ percent(previous[i]?.conversion) }}</td>
+                                    <td class="text-right">{{ i && previous[i]?.conversion != null && s.conversion != null ? signedPoints(s.conversion - previous[i].conversion) : '–' }}</td>
+                                </template>
                             </tr>
                         </tbody>
                     </table>
