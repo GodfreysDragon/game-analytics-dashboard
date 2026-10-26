@@ -65,6 +65,7 @@ else
 fi
 
 echo "Building the demo data (the first run simulates the full history and takes a few minutes)..."
-curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" --max-time 3600 "$URL/api/internal/demo-refresh"
+# An empty body still needs Content-Length, or Google's front end answers 411.
+curl -fsS -X POST -d '' -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" --max-time 3600 "$URL/api/internal/demo-refresh"
 echo
 echo "Live at $URL"
