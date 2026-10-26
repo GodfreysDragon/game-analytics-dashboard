@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Event;
 use App\Models\Game;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
@@ -71,6 +72,56 @@ class RefreshDemoCommandTest extends TestCase
         $this->assertEmpty(array_intersect($oldIds, Game::pluck('id')->all()));
         $this->assertSame(2, Game::count());
         $this->assertGreaterThanOrEqual('2026-06-15', Event::min('occurred_on'));
+    }
+
+    public function test_a_rebuild_paused_between_runs_stays_hidden_until_it_is_complete(): void
+    {
+        $this->artisan('analytics:demo-refresh')->assertSuccessful();
+        $old = Game::firstWhere('slug', 'starfall-tactics');
+        $oldEvents = $old->events()->count();
+
+        $this->travelTo('2026-06-16 00:05:00');
+        $this->artisan('analytics:demo-refresh --max-seconds=0')->expectsOutputToContain('continuing on the next run')->assertSuccessful();
+
+        // Visitors still get the old history, untouched, while the new one is built out of sight.
+        $this->actingAs(User::factory()->create())->getJson('/api/admin/games')
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.1.id', $old->id);
+        $this->assertSame($oldEvents, $old->events()->count());
+        $this->assertTrue(Game::where('building', true)->where('name', 'Starfall Tactics')->exists());
+
+        for ($runs = 1; Game::where('building', true)->exists(); $runs++) {
+            $this->assertLessThan(100, $runs, 'The rebuild never finished.');
+            $this->artisan('analytics:demo-refresh --max-seconds=0')->assertSuccessful();
+        }
+
+        $this->assertModelMissing($old);
+        $this->assertEqualsCanonicalizing(['starfall-tactics', 'pocket-harvest'], Game::pluck('slug')->all());
+        $rebuilt = Event::orderBy('uuid')->pluck('uuid')->all();
+
+        // Built in steps, the history is exactly what a single run builds.
+        Game::query()->delete();
+        Cache::flush();
+        $this->artisan('analytics:demo-refresh')->assertSuccessful();
+
+        $this->assertSame($rebuilt, Event::orderBy('uuid')->pluck('uuid')->all());
+    }
+
+    public function test_a_build_left_over_from_an_earlier_day_is_started_again(): void
+    {
+        $this->artisan('analytics:demo-refresh')->assertSuccessful();
+
+        $this->travelTo('2026-06-16 00:05:00');
+        $this->artisan('analytics:demo-refresh --max-seconds=0')->assertSuccessful();
+        $stale = Game::where('building', true)->pluck('id')->all();
+
+        $this->travelTo('2026-06-17 00:05:00');
+        $this->artisan('analytics:demo-refresh')->assertSuccessful();
+
+        $this->assertSame(0, Game::whereIn('id', $stale)->count());
+        $this->assertSame(0, Game::where('building', true)->count());
+        $this->assertSame(2, Game::count());
+        $this->assertGreaterThanOrEqual('2026-06-16', Event::min('occurred_on'));
     }
 
     public function test_it_picks_up_where_the_seeder_left_off(): void

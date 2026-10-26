@@ -11,7 +11,7 @@ set -euo pipefail
 : "${PROJECT_ID:?Set PROJECT_ID}"
 REGION="${REGION:-us-central1}"          # Cloud Run's free tier only counts usage in some US regions
 SERVICE="${SERVICE:-game-analytics-dashboard}"
-SCHEDULE="${SCHEDULE:-*/10 * * * *}"      # how often new simulated events are added
+SCHEDULE="${SCHEDULE:-*/20 * * * *}"      # how often new simulated events are added
 IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/apps/$SERVICE"
 
 gcloud config set project "$PROJECT_ID" >/dev/null
@@ -64,8 +64,15 @@ else
     gcloud scheduler jobs create http demo-refresh "${JOB_FLAGS[@]}" --headers "Authorization=Bearer $TOKEN"
 fi
 
-echo "Building the demo data (the first run simulates the full history and takes a few minutes)..."
-# An empty body still needs Content-Length, or Google's front end answers 411.
-curl -fsS -X POST -d '' -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" --max-time 3600 "$URL/api/internal/demo-refresh"
-echo
+echo "Building the demo data (the first build simulates the full history, a few minutes per call)..."
+RESPONSE="$(mktemp)"
+while :; do
+    # An empty body still needs Content-Length, or Google's front end answers 411.
+    STATUS="$(curl -sS -o "$RESPONSE" -w '%{http_code}' -X POST -d '' -H "Authorization: Bearer $TOKEN" \
+        -H "Accept: application/json" --max-time 1800 "$URL/api/internal/demo-refresh")"
+    cat "$RESPONSE"; echo
+    if [ "$STATUS" = 409 ]; then sleep 60; continue; fi    # the scheduler's call is running
+    [ "$STATUS" = 200 ] || exit 1
+    grep -q 'continuing on the next run' "$RESPONSE" || break
+done
 echo "Live at $URL"

@@ -1,7 +1,7 @@
 import { createApp } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import App from './App.vue';
-import { api, handleUnauthorized } from './lib/api';
+import { api, handleGameNotFound, handleUnauthorized } from './lib/api';
 import { loadGames, state } from './lib/store';
 
 const routes = [
@@ -31,6 +31,12 @@ handleUnauthorized(() => {
     if (state.user === null) return;
     state.user = null;
     router.push({ name: 'login' });
+});
+
+let reloadingGames = null;
+handleGameNotFound(() => {
+    if (state.user === null || reloadingGames) return;
+    reloadingGames = loadGames().catch(() => {}).finally(() => (reloadingGames = null));
 });
 
 // Resolve the session before the router's first navigation so guards know who is signed in.

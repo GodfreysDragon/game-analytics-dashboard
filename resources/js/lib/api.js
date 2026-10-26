@@ -1,5 +1,6 @@
 let csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
 let onUnauthorized = () => {};
+let onGameNotFound = () => {};
 
 export class ApiError extends Error {
     constructor(status, body) {
@@ -15,6 +16,11 @@ export function setCsrfToken(token) {
 
 export function handleUnauthorized(callback) {
     onUnauthorized = callback;
+}
+
+/** Called when a request under /games/{id} gets a 404, e.g. after the hosted demo swapped in a rebuilt game. */
+export function handleGameNotFound(callback) {
+    onGameNotFound = callback;
 }
 
 /**
@@ -50,6 +56,7 @@ export async function request(method, url, { params, body, signal } = {}) {
     const data = await response.json().catch(() => null);
 
     if (response.status === 401) onUnauthorized();
+    if (response.status === 404 && url.startsWith('/games/')) onGameNotFound();
     if (!response.ok) throw new ApiError(response.status, data);
 
     return data;
