@@ -61,6 +61,28 @@ Set `DEMO_MODE=true` to run the dashboard as a public demo:
 
 The command refuses to run unless `DEMO_MODE=true`, because it deletes the demo games.
 
+Hosts that keep no process alive for `schedule:run` can call `POST /api/internal/demo-refresh` instead, with
+`Authorization: Bearer <DEMO_REFRESH_TOKEN>`. Without demo mode or the right token it answers 404.
+
+### Deploying to Google Cloud Run
+
+The [`Dockerfile`](Dockerfile) builds a production image (FrankenPHP on Alpine, about 400 MB), and
+[`deploy/cloud-run.sh`](deploy/cloud-run.sh) deploys it with a Postgres database, such as Supabase's free tier.
+The script creates the secrets, builds with Cloud Build, deploys the service, and sets up a Cloud Scheduler job
+that calls the refresh endpoint every ten minutes:
+
+```sh
+gcloud auth login
+PROJECT_ID=my-project DATABASE_URL='postgresql://user:pass@host:5432/postgres?sslmode=require' deploy/cloud-run.sh
+```
+
+- **Free tier:** one instance at most, scaled to zero when idle. A ten-minute refresh uses about 60k of the
+  180k free vCPU-seconds a month. Google still requires a billing account, so set a budget alert.
+- **Supabase:** use the session pooler connection string. The direct connection is IPv6-only, and Cloud Run
+  connects over IPv4.
+- **Nightly rebuild:** against a remote database the rebuild after midnight UTC takes several minutes, so the
+  charts are thin for a while.
+
 ## Sending events
 
 ```http

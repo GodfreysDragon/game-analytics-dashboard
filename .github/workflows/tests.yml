@@ -8,19 +8,37 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [sqlite, pgsql]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: pdo_sqlite
+          extensions: pdo_sqlite, pdo_pgsql
           coverage: none
 
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Check code style
+        if: matrix.database == 'sqlite'
         run: vendor/bin/pint --test
 
       - name: Prepare environment
@@ -30,6 +48,13 @@ jobs:
 
       - name: Run tests
         run: php artisan test
+        env:
+          DB_CONNECTION: ${{ matrix.database }}
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: ${{ matrix.database == 'pgsql' && 'testing' || ':memory:' }}
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
 
   frontend:
     runs-on: ubuntu-latest
@@ -92,3 +117,25 @@ jobs:
       - name: Server log
         if: failure()
         run: cat storage/logs/serve.log storage/logs/laravel.log 2>/dev/null || true
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the production image
+        run: docker build -t game-analytics-dashboard .
+
+      - name: Check the Postgres driver is installed
+        run: docker run --rm --entrypoint php game-analytics-dashboard -m | grep -x pdo_pgsql
+
+      - name: Start the container and check it serves
+        run: |
+          docker run -d --name app -p 8080:8080 \
+            -e APP_KEY="base64:$(openssl rand -base64 32)" \
+            -e DB_CONNECTION=sqlite -e DB_DATABASE=/tmp/app.sqlite \
+            -e SESSION_DRIVER=database -e CACHE_STORE=database \
+            game-analytics-dashboard
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8080/up > /dev/null && exit 0; sleep 1; done
+          docker logs app
+          exit 1

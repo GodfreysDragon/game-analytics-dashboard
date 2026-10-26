@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\IngestController;
+use App\Http\Controllers\DemoRefreshController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -12,3 +13,6 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         ->middleware(['ingest.key', 'throttle:ingest'])
         ->name('events.store');
 });
+
+// Hosted demo: called by an external scheduler (e.g. Cloud Scheduler) with DEMO_REFRESH_TOKEN.
+Route::post('internal/demo-refresh', DemoRefreshController::class)->name('api.demo-refresh');

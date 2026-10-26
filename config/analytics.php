@@ -54,4 +54,7 @@ return [
 
     'demo_mode' => (bool) env('DEMO_MODE', false),
 
+    // Bearer token for POST /api/internal/demo-refresh. Leave empty to disable the endpoint.
+    'demo_refresh_token' => env('DEMO_REFRESH_TOKEN'),
+
 ];
